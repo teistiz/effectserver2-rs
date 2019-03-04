@@ -1,0 +1,137 @@
+{
+    "server": {
+        "udpAddr": "0.0.0.0:9909",
+        "webAddr": "0.0.0.0:8080",
+        "websocketAddr": "0.0.0.0:9910"
+    },
+    "hosts": {
+        "enttec": {
+            "type": "proxy",
+            "addr": "valot.party:9909"
+        }
+    },
+    "mapping": {
+        "lights": {
+            "0": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 1
+            },
+            "1": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 6
+            },
+            "2": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 11
+            },
+            "3": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 16
+            },
+            "4": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 21
+            },
+            "5": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 26
+            },
+            "6": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 31
+            },
+            "7": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 36
+            },
+            "8": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 41
+            },
+            "9": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 46
+            },
+            "10": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 51
+            },
+            "11": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 56
+            },
+            "12": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 61
+            },
+            "13": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 66
+            },
+            "14": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 71
+            },
+            "15": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 76
+            },
+            "16": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 81
+            },
+            "17": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 86
+            },
+            "18": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 91
+            },
+            "19": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 96
+            },
+            "20": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 101
+            },
+            "21": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 106
+            },
+            "22": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 111
+            },
+            "23": {
+                "type": "rgb",
+                "host": "enttec",
+                "address": 116
+            }
+        }
+    }
+}
