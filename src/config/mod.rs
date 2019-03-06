@@ -1,9 +1,12 @@
+//! Configuration file format and loader.
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, io};
 
 use serde::{Deserialize, Serialize};
 
+/// Configuration root level.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Root {
@@ -15,6 +18,7 @@ pub struct Root {
     pub mapping: Mapping,
 }
 
+/// API server configuration.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Server {
@@ -26,6 +30,7 @@ pub struct Server {
     pub websocket_addr: String,
 }
 
+/// Maps logical addresses to physical devices.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Mapping {
@@ -33,6 +38,7 @@ pub struct Mapping {
     pub lights: HashMap<u8, Light>,
 }
 
+/// Individual light source that can be controlled over DMX or similar bus.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Light {
@@ -60,6 +66,9 @@ pub enum Host {
     }
 }
 
+/// Read configuration from a JSON file.
+///
+/// May perform some validation before returning the config root.
 pub fn read_config_json<T: AsRef<Path>>(path: T) -> io::Result<Root> {
     let file = fs::File::open(path)?;
     let reader = io::BufReader::new(file);
@@ -68,10 +77,25 @@ pub fn read_config_json<T: AsRef<Path>>(path: T) -> io::Result<Root> {
         io::Error::from(io::ErrorKind::InvalidData)
     })?;
 
+    check_config(root)
+}
+
+pub fn read_config_yaml<T: AsRef<Path>>(path: T) -> io::Result<Root> {
+    let file = fs::File::open(path)?;
+    let reader = io::BufReader::new(file);
+    let root: Root = serde_yaml::from_reader(reader).map_err(|err| {
+        eprintln!("Error reading config file: {:?}", err);
+        io::Error::from(io::ErrorKind::InvalidData)
+    })?;
+
+    check_config(root)
+}
+
+/// Do a quick sanity check for the config.
+fn check_config(root: Root) -> io::Result<Root> {
     let hosts = &root.hosts;
     let lights = &root.mapping.lights;
 
-    // Quick sanity check for the configuration
     for (id, light) in lights {
         match light {
             Light::Rgb { host, .. } => {
@@ -83,6 +107,5 @@ pub fn read_config_json<T: AsRef<Path>>(path: T) -> io::Result<Root> {
             }
         }
     }
-
     Ok(root)
 }

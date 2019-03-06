@@ -1,29 +1,42 @@
+//! The Mapper maps logical addresses to host device commands.
+
+use std::net::IpAddr;
 use std::collections::HashMap;
 
 use crate::config::{self, Root};
 use crate::host::{self, LightHost, LightCommand};
+use crate::parser::{Command, CommandParser, ParserError};
 
-mod parser;
-use parser::{Command, CommandParser, ParserError};
-
-/// A single light's state in the mapper.
+/// A single RGB light's state in the mapper.
+#[allow(dead_code)]
 struct Light {
+    /// Name to use for the light.
     name: String,
+    /// Host this light is connected to.
     host_index: usize,
+    /// Host-specific address for the light.
     address: usize,
+    /// Last known red intensity.
     red: u8,
+    /// Last known green intensity.
     green: u8,
+    /// Last known blue intensity.
     blue: u8,
+    /// Last IP address that set this.
+    ip: Option<IpAddr>,
 }
 
-/// Mappers read requests and issue them to host devices.
+/// Mappers read commands and issue them to host devices.
 pub struct Mapper {
+    /// Configured lights.
     lights: HashMap<u8, Light>,
+    /// Configured light effect hosts.
     light_hosts: Vec<Box<LightHost>>,
-
+    /// Command parser/buffer.
     parser: CommandParser,
 }
 
+/// Result type for various Mapper actions.
 pub type MapperResult<T> = Result<T, MapperError>;
 
 /// Various runtime errors for the Mapper.
@@ -39,6 +52,7 @@ pub enum MapperError {
     IoError(std::io::Error),
 }
 
+/// Parser errors can become Mapper errors.
 impl From<ParserError> for MapperError {
     fn from(err: ParserError) -> MapperError {
         MapperError::ParserError(err)
@@ -87,6 +101,7 @@ impl Mapper {
                             red: 0,
                             green: 0,
                             blue: 0,
+                            ip: None,
                         },
                     );
                 }
@@ -100,10 +115,11 @@ impl Mapper {
         })
     }
 
-    /**
-     * Read a message from a buffer and issue some commands.
-     */
-    pub fn take_msg(&mut self, buf: &[u8]) -> MapperResult<()> {
+    /// Read a message from a buffer and issue some commands.
+    ///
+    /// TODO: Should the messages be parsed by the servers themselves?
+    /// Or would that move too much "business logic" into them?
+    pub fn take_msg(&mut self, buf: &[u8], ip: Option<IpAddr>) -> MapperResult<()> {
         let mut reader = std::io::BufReader::new(buf);
         self.parser.read_from(&mut reader)?;
 
@@ -134,6 +150,14 @@ impl Mapper {
                         // .ok_or_else(|| MapperError::UnknownAddr(*id))?;
                     // Check that its type matches the command
                     // TODO: Actually do that.
+                    if *light_type != 0 {
+                        eprintln!("Unknown light type {}", light_type);
+                    }
+
+                    light.red = *red;
+                    light.green = *green;
+                    light.blue = *blue;
+                    light.ip = ip;
 
                     // Issue a command to its host
                     let host = &mut self.light_hosts[light.host_index];
@@ -150,6 +174,7 @@ impl Mapper {
             }
         }
 
+        // TODO: Only flush the hosts that were used.
         for host in &mut self.light_hosts {
             host.flush();
         }

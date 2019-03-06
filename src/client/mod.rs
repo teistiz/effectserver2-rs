@@ -1,3 +1,5 @@
+//! UDP client for the Effect Server v1 protocol.
+
 use std::io;
 use std::net::UdpSocket;
 use std::cell::RefCell;
@@ -20,6 +22,7 @@ fn clamp_u8(num: f32) -> u8 {
     clamp(num * 255.0, 0.0, 255.0) as u8
 }
 
+#[allow(dead_code)]
 impl LightParam {
     pub fn new(num: u8, red: u8, green: u8, blue: u8) -> LightParam {
         LightParam(num, red, green, blue)

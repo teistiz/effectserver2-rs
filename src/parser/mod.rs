@@ -1,8 +1,11 @@
+//! Effect server v1 message format parser.
+
 use std::io::{self, Read};
 use byteorder::ReadBytesExt;
 
 /// Command buffer and message parser.
 pub struct CommandParser {
+    /// Commands parsed so far.
     pub cmds: Vec<Command>,
 }
 
@@ -21,7 +24,7 @@ pub enum ParserError {
     InvalidProtocolVersion(u8),
     UnsupportedLightType(u8),
     UnknownCommand(u8),
-    InvalidNick,
+    // InvalidNick,
     IoError(io::Error),
 }
 
@@ -39,15 +42,15 @@ impl CommandParser {
     }
 
     pub fn read_from(&mut self, buf: &mut Read) -> ParserResult<()> {
+        // Clear temp command buffer.
         self.cmds.clear();
-        // This mostly just verifies the protocol version, for now.
+        // Check the header.
         self.read_header(buf)?;
-
         while self.read_cmd(buf)? { }
-
         Ok(())
     }
 
+    ///
     fn read_header(&mut self, buf: &mut Read) -> ParserResult<()> {
         match buf.read_u8() {
             Ok(1) => Ok(()),
@@ -56,6 +59,7 @@ impl CommandParser {
         }
     }
 
+    /// Read the next command, if there is any data left. Returns Ok(false) on end-of-data.
     fn read_cmd(&mut self, buf: &mut Read) -> ParserResult<bool> {
         // Read cmd tag
         match buf.read_u8() {
@@ -64,14 +68,16 @@ impl CommandParser {
             Ok(cmd) => Err(ParserError::UnknownCommand(cmd)),
             Err(io_error) => match io_error.kind() {
                 io::ErrorKind::UnexpectedEof => {
+                    // Running out of data right before a command is ok.
                     return Ok(false);
                 },
                 _ => return Err(ParserError::IoError(io_error)),
             },
-        };
+        }?;
         return Ok(true);
     }
 
+    /// Read a nickname command.
     fn read_cmd_nick(&mut self, buf: &mut Read) -> ParserResult<()> {
         let mut tmp = vec![];
         // Read bytes until we hit a zero
@@ -83,15 +89,24 @@ impl CommandParser {
             tmp.push(byte);
         }
 
+        // Let's just tolerate bad UTF-8 for now.
         let nick = String::from_utf8_lossy(&tmp).to_string();
         self.cmds.push(Command::Nick { nick });
         Ok(())
     }
 
+    /// Read a basic light command from the buffer.
     fn read_cmd_light(&mut self, buf: &mut Read) -> ParserResult<()> {
+        let id = buf.read_u8()?;
+
+        let light_type = buf.read_u8()?;
+        if light_type != 0 {
+            return Err(ParserError::UnsupportedLightType(light_type));
+        }
+
         self.cmds.push(Command::RgbLight {
-            id: buf.read_u8()?,
-            light_type: buf.read_u8()?,
+            id,
+            light_type,
             red: buf.read_u8()?,
             green: buf.read_u8()?,
             blue: buf.read_u8()?,
