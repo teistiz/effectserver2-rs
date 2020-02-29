@@ -3,35 +3,57 @@
 use std::net::IpAddr;
 use std::collections::HashMap;
 
+use std::sync::Arc;
+
 use crate::config::{self, Root};
-use crate::host::{self, LightHost, LightCommand};
+use crate::host::{self, EffectHost, LightCommand};
 use crate::parser::{Command, CommandParser, ParserError};
+
+struct Effect {
+    /// Name to use for this effect.
+    name: String,
+    /// Index of the host this effect is connected to.
+    host_index: usize,
+    /// Number that may mean something to the host.
+    /// TODO would be nice if this didn't have to know about DMX addresses or whatever.
+    address: usize,
+    /// Last IP address that set this.
+    last_ip: Option<IpAddr>,
+    /// Last tag that set this.
+    last_tag: Option<Arc<String>>,
+    /// Detailed description of the effect.
+    kind: EffectKind,
+}
+enum EffectKind {
+    Rgb(LightRgb),
+    Uv(LightUv),
+    // Smoke(),
+}
 
 /// A single RGB light's state in the mapper.
 #[allow(dead_code)]
-struct Light {
-    /// Name to use for the light.
-    name: String,
-    /// Host this light is connected to.
-    host_index: usize,
-    /// Host-specific address for the light.
-    address: usize,
+struct LightRgb {
     /// Last known red intensity.
     red: u8,
     /// Last known green intensity.
     green: u8,
     /// Last known blue intensity.
     blue: u8,
-    /// Last IP address that set this.
-    ip: Option<IpAddr>,
+}
+
+/// A single RGB light's state in the mapper.
+#[allow(dead_code)]
+struct LightUv {
+    /// Last known intensity.
+    intensity: u8,
 }
 
 /// Mappers read commands and issue them to host devices.
 pub struct Mapper {
     /// Configured lights.
-    lights: HashMap<u8, Light>,
+    effects: HashMap<u8, Effect>,
     /// Configured light effect hosts.
-    light_hosts: Vec<Box<LightHost>>,
+    effect_hosts: Vec<Box<dyn EffectHost>>,
     /// Command parser/buffer.
     parser: CommandParser,
 }
@@ -62,16 +84,16 @@ impl From<ParserError> for MapperError {
 impl Mapper {
     /// Try to set up a mapper and its host devices from a configuration.
     pub fn from_config(config: &Root) -> MapperResult<Mapper> {
-        let mut lights: HashMap<u8, Light> = HashMap::new();
-        let mut light_hosts: Vec<Box<LightHost>> = vec![];
+        let mut effects: HashMap<u8, Effect> = HashMap::new();
+        let mut effect_hosts: Vec<Box<dyn EffectHost>> = vec![];
 
         // Helper for assigning lights to hosts.
-        let mut light_hosts_lookup: HashMap<String, usize> = HashMap::new();
+        let mut hosts_lookup: HashMap<String, usize> = HashMap::new();
 
         // Read host device information.
         for (id, host) in &config.hosts {
-            light_hosts_lookup.insert(id.clone(), light_hosts.len());
-            let host_device: Box<LightHost> = match host {
+            hosts_lookup.insert(id.clone(), effect_hosts.len());
+            let host_device: Box<dyn EffectHost> = match host {
                 config::Host::Enttec { path } => Box::new(
                     host::Enttec::new(path.as_ref()).expect("Unable to initialize Enttec device!"),
                 ),
@@ -79,8 +101,17 @@ impl Mapper {
                     host::UdpProxy::new(addr).expect("Unable to initialize Proxy device!")
                 ),
             };
-            light_hosts.push(host_device);
+            effect_hosts.push(host_device);
         }
+
+        let get_host = |host: &String| -> usize {
+            match hosts_lookup.get(host) {
+                Some(host_index) => *host_index,
+                None => {
+                    panic!("Unknown host: {}", host);
+                }
+            }
+        };
 
         // Set up lights and their host device mapping.
         for (id, light) in &config.mapping.lights {
@@ -90,18 +121,40 @@ impl Mapper {
                     address,
                     name,
                 } => {
-                    let host_index = 0;
+                    let host_index = get_host(host);
 
-                    lights.insert(
+                    effects.insert(
                         *id,
-                        Light {
+                        Effect {
                             name: name.clone().unwrap_or_else(|| format!("{}-{}", host, id)),
                             host_index,
                             address: *address as usize,
-                            red: 0,
-                            green: 0,
-                            blue: 0,
-                            ip: None,
+                            last_ip: None,
+                            last_tag: None,
+                            kind: EffectKind::Rgb(LightRgb {
+                                red: 0,
+                                green: 0,
+                                blue: 0,
+                            })
+                        },
+                    );
+                },
+                config::Light::Uv {
+                    host, address, name
+                } => {
+                    let host_index = get_host(host);
+
+                    effects.insert(
+                        *id,
+                        Effect {
+                            name: name.clone().unwrap_or_else(|| format!("{}-{}", host, id)),
+                            host_index,
+                            address: *address as usize,
+                            last_ip: None,
+                            last_tag: None,
+                            kind: EffectKind::Uv(LightUv {
+                                intensity: 0,
+                            })
                         },
                     );
                 }
@@ -109,8 +162,8 @@ impl Mapper {
         }
 
         Ok(Mapper {
-            lights,
-            light_hosts,
+            effects,
+            effect_hosts,
             parser: CommandParser::new(),
         })
     }
@@ -123,13 +176,12 @@ impl Mapper {
         let mut reader = std::io::BufReader::new(buf);
         self.parser.read_from(&mut reader)?;
 
-        let mut last_nick: Option<String> = None;
+        let mut last_nick: Option<Arc<String>> = None;
 
         for cmd in &self.parser.cmds {
             match cmd {
                 Command::Nick { nick } => {
-                    // ewww, clone
-                    last_nick = Some(nick.clone())
+                    last_nick = Some(Arc::new(nick.clone()));
                 }
                 Command::RgbLight {
                     id,
@@ -138,45 +190,54 @@ impl Mapper {
                     green,
                     blue,
                 } => {
-                    // Look for a light with a given id
-                    let light = self
-                        .lights
-                        .get_mut(&id);
-                    if light.is_none() {
+                    let mut effect = if let Some(effect) = self.effects.get_mut(&id) {
+                        effect
+                    } else {
                         eprintln!("Unknown light id {}", id);
                         continue;
-                    }
-                    let light = light.unwrap();
-                        // .ok_or_else(|| MapperError::UnknownAddr(*id))?;
-                    // Check that its type matches the command
-                    // TODO: Actually do that.
+                    };
+
                     if *light_type != 0 {
                         eprintln!("Unknown light type {}", light_type);
                     }
 
-                    light.red = *red;
-                    light.green = *green;
-                    light.blue = *blue;
-                    light.ip = ip;
+                    effect.last_ip = ip;
+                    effect.last_tag = last_nick.clone();
 
-                    // Issue a command to its host
-                    let host = &mut self.light_hosts[light.host_index];
-                    host.take_command(&LightCommand {
-                        id: *id as usize,
-                        address: light.address,
-                        red: *red,
-                        green: *green,
-                        blue: *blue,
-                    })
-                    // And record that the host needs a flush
-                    // TODO: Actually do that.
+                    let host = &mut self.effect_hosts[effect.host_index];
+
+                    match &mut effect.kind {
+                        EffectKind::Rgb(light) => {
+                            light.red = *red;
+                            light.green = *green;
+                            light.blue = *blue;
+                            host.take_command(&LightCommand::Rgb {
+                                id: *id as usize,
+                                address: effect.address,
+                                red: light.red,
+                                green: light.green,
+                                blue: light.blue,
+                            });
+                        },
+                        EffectKind::Uv(light) => {
+                            let luma = (*red as u16) * 2 + (*green as u16) * 7 + (*blue as u16);
+                            light.intensity = (luma / 10) as u8;
+                            host.take_command(&LightCommand::Uv {
+                                id: *id as usize,
+                                address: effect.address,
+                                intensity: light.intensity,
+                            });
+                        }
+                    }
+
+                    // TODO Keep track of which hosts have received commands
                 }
             }
         }
 
         // TODO: Only flush the hosts that were used.
-        for host in &mut self.light_hosts {
-            host.flush();
+        for host in &mut self.effect_hosts {
+            host.flush().ok();
         }
 
         Ok(())

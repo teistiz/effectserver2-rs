@@ -41,7 +41,7 @@ impl CommandParser {
         }
     }
 
-    pub fn read_from(&mut self, buf: &mut Read) -> ParserResult<()> {
+    pub fn read_from(&mut self, buf: &mut dyn Read) -> ParserResult<()> {
         // Clear temp command buffer.
         self.cmds.clear();
         // Check the header.
@@ -51,7 +51,7 @@ impl CommandParser {
     }
 
     ///
-    fn read_header(&mut self, buf: &mut Read) -> ParserResult<()> {
+    fn read_header(&mut self, buf: &mut dyn Read) -> ParserResult<()> {
         match buf.read_u8() {
             Ok(1) => Ok(()),
             Ok(ver) => Err(ParserError::InvalidProtocolVersion(ver)),
@@ -60,7 +60,7 @@ impl CommandParser {
     }
 
     /// Read the next command, if there is any data left. Returns Ok(false) on end-of-data.
-    fn read_cmd(&mut self, buf: &mut Read) -> ParserResult<bool> {
+    fn read_cmd(&mut self, buf: &mut dyn Read) -> ParserResult<bool> {
         // Read cmd tag
         match buf.read_u8() {
             Ok(0) => self.read_cmd_nick(buf),
@@ -78,7 +78,7 @@ impl CommandParser {
     }
 
     /// Read a nickname command.
-    fn read_cmd_nick(&mut self, buf: &mut Read) -> ParserResult<()> {
+    fn read_cmd_nick(&mut self, buf: &mut dyn Read) -> ParserResult<()> {
         let mut tmp = vec![];
         // Read bytes until we hit a zero
         loop {
@@ -96,7 +96,7 @@ impl CommandParser {
     }
 
     /// Read a basic light command from the buffer.
-    fn read_cmd_light(&mut self, buf: &mut Read) -> ParserResult<()> {
+    fn read_cmd_light(&mut self, buf: &mut dyn Read) -> ParserResult<()> {
         let id = buf.read_u8()?;
 
         let light_type = buf.read_u8()?;

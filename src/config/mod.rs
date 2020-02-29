@@ -50,6 +50,14 @@ pub enum Light {
         /// Human-readable name.
         name: Option<String>,
     },
+    Uv {
+        /// Host device to use
+        host: String,
+        /// DMX address to use.
+        address: u16,
+        /// Human-readable name.
+        name: Option<String>,
+    }
 }
 
 /// Host device configuration.
@@ -101,10 +109,17 @@ fn check_config(root: Root) -> io::Result<Root> {
             Light::Rgb { host, .. } => {
                 // RGB lights should refer to a valid host.
                 if !hosts.contains_key(host) {
-                    eprintln!("Light {} refers to invalid host: {}", id, host);
+                    eprintln!("RGB light {} refers to invalid host: {}", id, host);
                     return Err(io::Error::from(io::ErrorKind::InvalidData))
                 }
-            }
+            },
+            Light::Uv { host, .. } => {
+                // UV lights should refer to a valid host.
+                if !hosts.contains_key(host) {
+                    eprintln!("UV light {} refers to invalid host: {}", id, host);
+                    return Err(io::Error::from(io::ErrorKind::InvalidData))
+                }
+            },
         }
     }
     Ok(root)

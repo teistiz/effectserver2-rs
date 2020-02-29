@@ -108,3 +108,19 @@ mapping:
       type: "rgb"
       host: "enttec"
       address: 116
+    24:
+      type: "uv"
+      host: "enttec"
+      address: 121
+    25:
+      type: "uv"
+      host: "enttec"
+      address: 126
+    26:
+      type: "uv"
+      host: "enttec"
+      address: 131
+    27:
+      type: "uv"
+      host: "enttec"
+      address: 136

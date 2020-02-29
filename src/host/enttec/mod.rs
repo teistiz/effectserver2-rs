@@ -3,7 +3,7 @@
 use serialport;
 use std::io;
 
-use super::{LightCommand, LightHost};
+use super::{LightCommand, EffectHost};
 
 type DMXPayload = [u8; 512];
 
@@ -38,23 +38,35 @@ impl Enttec {
     }
 }
 
-impl LightHost for Enttec {
+impl EffectHost for Enttec {
     /// Write a single light's control data into the buffer.
     ///
     /// TODO: Is this the right API for this? Should this just take raw buffers?
     /// The buffers could then be mixed somewhere else.
     fn take_command(&mut self, cmd: &LightCommand) {
-        // println!("take command: {:?}", cmd);
-        let offset = cmd.address;
-        // let offset = index * 5 + 1;
-        if offset > 507 {
-            panic!("Invalid DMX bus offset: {}", offset);
+
+        match cmd {
+            LightCommand::Rgb { address, red, green, blue , .. } => {
+                let offset = *address;
+                if offset > 507 {
+                    panic!("Invalid DMX bus offset: {}", offset);
+                }
+                self.payload[offset] = *red;
+                self.payload[offset + 1] = *green;
+                self.payload[offset + 2] = *blue;
+                self.payload[offset + 3] = 255;
+                self.payload[offset + 4] = 0;
+            },
+            LightCommand::Uv { address, intensity, .. } => {
+                let offset = *address;
+                if offset > 510 {
+                    panic!("Invalid DMX bus offset: {}", offset);
+                }
+                self.payload[offset] = *intensity;
+                // Strobe mode, 0..9 = no strobe, 10..255 = strobe (increasing frequency)
+                self.payload[offset + 1] = 0;
+            }
         }
-        self.payload[offset] = cmd.red;
-        self.payload[offset + 1] = cmd.green;
-        self.payload[offset + 2] = cmd.blue;
-        self.payload[offset + 3] = 255;
-        self.payload[offset + 4] = 0;
     }
 
     /// Flush current buffer into the bus.
