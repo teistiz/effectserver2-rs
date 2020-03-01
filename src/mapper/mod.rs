@@ -1,17 +1,21 @@
 //! The Mapper maps logical addresses to host device commands.
 
-use std::net::IpAddr;
 use std::collections::HashMap;
-
+use std::net::IpAddr;
 use std::sync::Arc;
+use tokio::sync::watch;
 
 use crate::config::{self, Root};
 use crate::host::{self, EffectHost, LightCommand};
 use crate::parser::{Command, CommandParser, ParserError};
 
+mod monitor;
+use monitor::StatusMessage;
+
+#[derive(Debug)]
 struct Effect {
     /// Name to use for this effect.
-    name: String,
+    name: Arc<String>,
     /// Index of the host this effect is connected to.
     host_index: usize,
     /// Number that may mean something to the host.
@@ -24,6 +28,7 @@ struct Effect {
     /// Detailed description of the effect.
     kind: EffectKind,
 }
+#[derive(Debug)]
 enum EffectKind {
     Rgb(LightRgb),
     Uv(LightUv),
@@ -32,6 +37,7 @@ enum EffectKind {
 
 /// A single RGB light's state in the mapper.
 #[allow(dead_code)]
+#[derive(Debug)]
 struct LightRgb {
     /// Last known red intensity.
     red: u8,
@@ -43,6 +49,7 @@ struct LightRgb {
 
 /// A single RGB light's state in the mapper.
 #[allow(dead_code)]
+#[derive(Debug)]
 struct LightUv {
     /// Last known intensity.
     intensity: u8,
@@ -56,6 +63,8 @@ pub struct Mapper {
     effect_hosts: Vec<Box<dyn EffectHost>>,
     /// Command parser/buffer.
     parser: CommandParser,
+    /// Message bus for watching teh status.
+    sender: watch::Sender<monitor::StatusMessage>,
 }
 
 /// Result type for various Mapper actions.
@@ -97,9 +106,9 @@ impl Mapper {
                 config::Host::Enttec { path } => Box::new(
                     host::Enttec::new(path.as_ref()).expect("Unable to initialize Enttec device!"),
                 ),
-                config::Host::Proxy { addr } => Box::new(
-                    host::UdpProxy::new(addr).expect("Unable to initialize Proxy device!")
-                ),
+                config::Host::Proxy { addr } => {
+                    Box::new(host::UdpProxy::new(addr).expect("Unable to initialize Proxy device!"))
+                }
             };
             effect_hosts.push(host_device);
         }
@@ -126,7 +135,9 @@ impl Mapper {
                     effects.insert(
                         *id,
                         Effect {
-                            name: name.clone().unwrap_or_else(|| format!("{}-{}", host, id)),
+                            name: Arc::new(
+                                name.clone().unwrap_or_else(|| format!("{}-{}", host, id)),
+                            ),
                             host_index,
                             address: *address as usize,
                             last_ip: None,
@@ -135,37 +146,61 @@ impl Mapper {
                                 red: 0,
                                 green: 0,
                                 blue: 0,
-                            })
+                            }),
                         },
                     );
-                },
+                }
                 config::Light::Uv {
-                    host, address, name
+                    host,
+                    address,
+                    name,
                 } => {
                     let host_index = get_host(host);
 
                     effects.insert(
                         *id,
                         Effect {
-                            name: name.clone().unwrap_or_else(|| format!("{}-{}", host, id)),
+                            name: Arc::new(
+                                name.clone().unwrap_or_else(|| format!("{}-{}", host, id)),
+                            ),
                             host_index,
                             address: *address as usize,
                             last_ip: None,
                             last_tag: None,
-                            kind: EffectKind::Uv(LightUv {
-                                intensity: 0,
-                            })
+                            kind: EffectKind::Uv(LightUv { intensity: 0 }),
                         },
                     );
                 }
             }
         }
 
+        let (sender, receiver) = watch::channel(Self::get_status_message(&effects));
+
+        monitor::start_monitor_thread(&config.server.web_addr, receiver);
+
         Ok(Mapper {
             effects,
             effect_hosts,
             parser: CommandParser::new(),
+            sender,
         })
+    }
+
+    /// Turn the current effect status into a StatusMessage.
+    fn get_status_message(effects: &HashMap<u8, Effect>) -> StatusMessage {
+        use monitor::LightStatus;
+        let mut lights = Vec::with_capacity(effects.len());
+        for (id, effect) in effects {
+            let (r, g, b) = match effect.kind {
+                EffectKind::Rgb(LightRgb { red, green, blue }) => (red, green, blue),
+                EffectKind::Uv(LightUv { intensity }) => (intensity, intensity, intensity),
+            };
+            lights.push(LightStatus { id: *id, r, g, b });
+        }
+
+        lights.sort_unstable_by_key(|light| light.id);
+
+        StatusMessage { lights }
     }
 
     /// Read a message from a buffer and issue some commands.
@@ -218,7 +253,7 @@ impl Mapper {
                                 green: light.green,
                                 blue: light.blue,
                             });
-                        },
+                        }
                         EffectKind::Uv(light) => {
                             let luma = (*red as u16) * 2 + (*green as u16) * 7 + (*blue as u16);
                             light.intensity = (luma / 10) as u8;
@@ -239,6 +274,9 @@ impl Mapper {
         for host in &mut self.effect_hosts {
             host.flush().ok();
         }
+
+        // Update the status bus.
+        self.sender.broadcast(Self::get_status_message(&self.effects)).ok();
 
         Ok(())
     }

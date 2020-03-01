@@ -3,7 +3,7 @@ pub mod config;
 pub mod host;
 pub mod mapper;
 pub mod parser;
-pub mod server;
+pub mod listener;
 
 fn main() -> std::io::Result<()> {
     let config_root = config::read_config_yaml("./config.yaml")?;
@@ -13,7 +13,7 @@ fn main() -> std::io::Result<()> {
     let cmd_mapper = mapper::Mapper::from_config(&config_root)
         .map_err(|_| std::io::Error::from(std::io::ErrorKind::Other))?;
 
-    server::serve(config_root, cmd_mapper)?;
+    listener::serve(config_root, cmd_mapper)?;
 
     Ok(())
 }
