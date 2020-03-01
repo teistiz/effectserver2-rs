@@ -58,6 +58,6 @@ def blue(n, t):
 
 while True:
     control.set([
-        (n, red(n, t), green(n, t), blue(n, t)) for n in range(0, 24)])
+        (n, red(n, t), green(n, t), blue(n, t)) for n in range(0, 28)])
     t += 0.1
     time.sleep(0.05)

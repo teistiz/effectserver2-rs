@@ -13,8 +13,8 @@ use warp::{
     Filter,
 };
 
-const HTML_DOC: &str = include_str!("./monitor.html");
-const HTML_SCRIPT: &str = include_str!("./monitor.js");
+const HTML_DOC: &str = include_str!("../../../static/index.html");
+const HTML_SCRIPT: &str = include_str!("../../../static/script.js");
 
 #[derive(Serialize, Debug, Clone)]
 pub struct StatusMessage {
@@ -46,7 +46,7 @@ async fn server(addr: SocketAddr, receiver: Receiver<StatusMessage>) {
 
     use warp::path;
 
-    let r_script = warp::get().and(path!("monitor.js")).map(|| {
+    let r_script = warp::get().and(path!("script.js")).map(|| {
         Response::builder()
             .header("Content-Type", "text/javascript")
             .body(HTML_SCRIPT)
