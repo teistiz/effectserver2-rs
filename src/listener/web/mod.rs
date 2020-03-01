@@ -13,7 +13,7 @@ use super::ServerMessage;
 /// Start a thread that will accept UDP packets and message them
 /// to the server's event loop.
 pub fn start_web_thread(addr: &str, sender: Sender<ServerMessage>) -> JoinHandle<()> {
-    println!("[web] Starting Web server at {}", addr);
+    println!("[web] Starting WebSocket server at {}", addr);
 
     let addr: SocketAddr = addr.parse().unwrap();
 
