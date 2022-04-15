@@ -18,7 +18,7 @@ pub fn start_web_thread(addr: &str, sender: Sender<ServerMessage>) -> JoinHandle
     let addr: SocketAddr = addr.parse().unwrap();
 
     std::thread::spawn(move || {
-        let mut runtime = Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
         runtime.block_on(server(addr, sender));
     })
 }

@@ -34,7 +34,7 @@ pub fn start_monitor_thread(addr: &str, receiver: Receiver<StatusMessage>) -> Jo
     let addr: SocketAddr = addr.parse().unwrap();
 
     std::thread::spawn(move || {
-        let mut runtime = Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
         runtime.block_on(server(addr, receiver));
     })
 }
@@ -66,11 +66,9 @@ async fn websocket(ws: WebSocket, mut recv: Receiver<StatusMessage>) {
 
     let (mut tx, _rx) = ws.split();
 
-    while let Some(status) = recv.recv().await {
-        match tx
-            .send(Message::text(serde_json::to_string(&status).unwrap()))
-            .await
-        {
+    while recv.changed().await.is_ok() {
+        let message = Message::text(serde_json::to_string(&*recv.borrow()).unwrap());
+        match tx.send(message).await {
             Ok(_) => {}
             Err(_err) => {
                 eprintln!("[monitor] WebSocket dropped?");

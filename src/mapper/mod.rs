@@ -276,7 +276,7 @@ impl Mapper {
         }
 
         // Update the status bus.
-        self.sender.broadcast(Self::get_status_message(&self.effects)).ok();
+        self.sender.send(Self::get_status_message(&self.effects)).ok();
 
         Ok(())
     }

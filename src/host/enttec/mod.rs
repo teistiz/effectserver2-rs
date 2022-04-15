@@ -24,8 +24,7 @@ impl Enttec {
         println!("Enttec @ {:?}", path);
         let port = match path {
             Some(path) => {
-                let mut port = serialport::open(path)?;
-                port.set_baud_rate(57600)?;
+                let port = serialport::new(path, 57600).open()?;
                 Some(port)
             }
             None => None,
