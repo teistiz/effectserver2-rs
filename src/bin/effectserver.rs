@@ -1,9 +1,4 @@
-pub mod client;
-pub mod config;
-pub mod host;
-pub mod mapper;
-pub mod parser;
-pub mod listener;
+use effectserver2_rs::{config, listener, mapper};
 
 fn main() -> std::io::Result<()> {
     let config_root = config::read_config_yaml("./config.yaml")?;

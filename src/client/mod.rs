@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 /// Raw parameters for a RGB light command.
 /// The first u8 is the light's logical address.
+#[derive(Clone, Copy, Debug)]
 pub struct LightParam(pub u8, pub u8, pub u8, pub u8);
 
 fn clamp(num: f32, min: f32, max: f32) -> f32 {
