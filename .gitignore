@@ -1,3 +1,4 @@
 /target
 /config.json
+/Config.yaml
 **/*.rs.bk

@@ -1,3 +1,5 @@
+# Example configuration file. Rename to config.yaml to use.
+
 server:
   udpAddr: "0.0.0.0:9909"
   webAddr: "0.0.0.0:8080"
@@ -7,8 +9,8 @@ hosts:
   enttec:
     # type: "enttec"
     type: "proxy"
-    # addr: "valot.party:9909"
-    addr: "localhost:9809"
+    addr: "valot.instanssi:9909"
+    # addr: "localhost:9809"
 
 mapping:
   lights:
