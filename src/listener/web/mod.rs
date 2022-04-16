@@ -1,12 +1,16 @@
 //! WebSocket connection support.
 
+use axum::extract::ws::{Message, WebSocket};
+use axum::extract::WebSocketUpgrade;
+use axum::response::IntoResponse;
+use axum::Extension;
+use axum_client_ip::ClientIp;
 use crossbeam::channel::Sender;
-use futures::stream::StreamExt;
-use std::net::SocketAddr;
+use futures_util::StreamExt;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use tokio::runtime::Runtime;
-use warp::filters::ws::WebSocket;
-use warp::Filter;
 
 use super::ServerMessage;
 
@@ -18,47 +22,56 @@ pub fn start_web_thread(addr: &str, sender: Sender<ServerMessage>) -> JoinHandle
     let addr: SocketAddr = addr.parse().unwrap();
 
     std::thread::spawn(move || {
-        let mut runtime = Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
         runtime.block_on(server(addr, sender));
     })
 }
 
 async fn server(addr: SocketAddr, sender: Sender<ServerMessage>) {
-    let with_sender = warp::any().map(move || sender.clone());
-    let with_ip = warp::addr::remote().map(|addr: Option<SocketAddr>| {
-        addr
-    });
+    use axum::{routing::get, Router};
 
-    let ws = warp::ws().and(with_sender).and(with_ip).map(
-        |ws: warp::filters::ws::Ws, sender: Sender<ServerMessage>, addr: Option<SocketAddr>| {
-            let sender = sender.clone();
-            let addr = addr.clone();
-            ws.on_upgrade(move |ws| websocket(ws, sender, addr.unwrap()))
-        },
-    );
+    let state = Arc::new(State { sender });
 
-    warp::serve(ws).run(addr).await;
+    let router = Router::new()
+        .route("/", get(get_websocket))
+        .layer(Extension(state));
+
+    axum::Server::bind(&addr).serve(router.into_make_service_with_connect_info::<SocketAddr>());
+}
+
+struct State {
+    sender: Sender<ServerMessage>,
+}
+
+async fn get_websocket(
+    ws: WebSocketUpgrade,
+    Extension(state): Extension<Arc<State>>,
+    ClientIp(addr): ClientIp,
+) -> impl IntoResponse {
+    let sender = state.sender.clone();
+    ws.on_upgrade(move |ws| websocket(ws, sender, addr))
 }
 
 /// Single WebSocket connection.
-async fn websocket(ws: WebSocket, sender: Sender<ServerMessage>, addr: SocketAddr) {
+async fn websocket(ws: WebSocket, sender: Sender<ServerMessage>, ip: IpAddr) {
     println!("[web] WebSocket opening.");
-    // let ip = ws.
     let (_tx, mut rx) = ws.split();
 
     while let Some(result) = rx.next().await {
         match result {
             Ok(msg) => {
-                if msg.is_binary() {
-                    match sender.send(ServerMessage::Binary {
-                        ip: addr.ip(),
-                        data: msg.into_bytes(),
-                    }) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            // listener dead?
-                            break;
+                match msg {
+                    Message::Binary(data) => {
+                        match sender.send(ServerMessage::Binary { ip, data }) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                // listener dead?
+                                break;
+                            }
                         }
+                    }
+                    _ => {
+                        eprintln!("Non-binary message?");
                     }
                 }
             }

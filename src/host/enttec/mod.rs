@@ -3,7 +3,7 @@
 use serialport;
 use std::io;
 
-use super::{LightCommand, EffectHost};
+use super::{EffectHost, LightCommand};
 
 type DMXPayload = [u8; 512];
 
@@ -24,8 +24,7 @@ impl Enttec {
         println!("Enttec @ {:?}", path);
         let port = match path {
             Some(path) => {
-                let mut port = serialport::open(path)?;
-                port.set_baud_rate(57600)?;
+                let port = serialport::new(path, 57600).open()?;
                 Some(port)
             }
             None => None,
@@ -44,9 +43,14 @@ impl EffectHost for Enttec {
     /// TODO: Is this the right API for this? Should this just take raw buffers?
     /// The buffers could then be mixed somewhere else.
     fn take_command(&mut self, cmd: &LightCommand) {
-
         match cmd {
-            LightCommand::Rgb { address, red, green, blue , .. } => {
+            LightCommand::Rgb {
+                address,
+                red,
+                green,
+                blue,
+                ..
+            } => {
                 let offset = *address;
                 if offset > 507 {
                     panic!("Invalid DMX bus offset: {}", offset);
@@ -56,8 +60,10 @@ impl EffectHost for Enttec {
                 self.payload[offset + 2] = *blue;
                 self.payload[offset + 3] = 255;
                 self.payload[offset + 4] = 0;
-            },
-            LightCommand::Uv { address, intensity, .. } => {
+            }
+            LightCommand::Uv {
+                address, intensity, ..
+            } => {
                 let offset = *address;
                 if offset > 510 {
                     panic!("Invalid DMX bus offset: {}", offset);

@@ -9,7 +9,7 @@ fn main() {
 
     let mut params: Vec<LightParam> = vec![];
 
-    for index in 0..24 {
+    for index in 0..28 {
         params.push(LightParam(index, 8, 32, 64));
     }
 

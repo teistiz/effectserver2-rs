@@ -195,7 +195,14 @@ impl Mapper {
                 EffectKind::Rgb(LightRgb { red, green, blue }) => (red, green, blue),
                 EffectKind::Uv(LightUv { intensity }) => (intensity, intensity, intensity),
             };
-            lights.push(LightStatus { id: *id, r, g, b });
+            lights.push(LightStatus {
+                id: *id,
+                r,
+                g,
+                b,
+                tag: effect.last_tag.clone(),
+                ip: effect.last_ip.clone(),
+            });
         }
 
         lights.sort_unstable_by_key(|light| light.id);
@@ -276,7 +283,9 @@ impl Mapper {
         }
 
         // Update the status bus.
-        self.sender.broadcast(Self::get_status_message(&self.effects)).ok();
+        self.sender
+            .send(Self::get_status_message(&self.effects))
+            .ok();
 
         Ok(())
     }

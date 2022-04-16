@@ -10,8 +10,13 @@
                 font-family: sans-serif;
                 font-weight: normal;
             }
+            .lights {
+                display: flex;
+                flex-wrap: wrap;
+            }
             .light {
-                display: inline-block;
+                display: flex;
+                flex-direction: column;
                 margin: 0 4px 4px 0;
                 width: 100px;
                 height: 100px;
@@ -19,6 +24,13 @@
                 padding: 2px;
                 text-shadow: #000 0 0 2px;
                 font-weight: 700;
+            }
+            .light__tag {
+                margin-top: auto;
+            }
+            .light__tag, .light__ip {
+                font-weight: 400;
+                font-size: .8rem;
             }
         </style>
     </head>

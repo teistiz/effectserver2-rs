@@ -1,6 +1,6 @@
 "use strict";
 
-(function() {
+(function () {
     const eRoot = document.getElementById("app");
 
     const eConnStatus = document.createElement("div");
@@ -30,9 +30,10 @@
             socket.close();
             socket = null;
         }
-        setStatus("connecting");
-        const url = new URL(document.URL);
-        socket = new WebSocket(`ws://${url.host}/`);
+        const documentUrl = new URL(document.URL);
+        const url = `ws://${documentUrl.host}/ws`
+        setStatus(`connecting to ${url}`);
+        socket = new WebSocket(url);
         socket.onopen = (event) => {
             console.info("[ws] Open:", event);
             setStatus("connected");
@@ -79,15 +80,28 @@
 
     function createBlock(id) {
         const block = document.createElement("div");
-        block.id = `light-${id}`;
-        block.className="light";
+        block.id = id;
+        block.className = "light";
+
+        const makeChild = (tag, className) => {
+            const element = document.createElement(tag);
+            element.className = className;
+            block.appendChild(element);
+            return element;
+        };
+        block.__id = makeChild("div", "light__id");
+        block.__tag = makeChild("div", "light__tag");
+        block.__ip = makeChild("div", "light__ip");
+
         return block;
     }
 
     function updateBlock(element, lightStatus) {
         const { id, r, g, b } = lightStatus;
-        element.innerText = id;
         element.style = `background: rgb(${r}, ${g}, ${b})`;
+        element.__id.innerText = id;
+        element.__ip.innerText = lightStatus.ip;
+        element.__tag.innerText = lightStatus.tag;
     }
 
     openSocket();
