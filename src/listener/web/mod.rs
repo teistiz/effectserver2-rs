@@ -4,7 +4,7 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::WebSocketUpgrade;
 use axum::response::IntoResponse;
 use axum::Extension;
-use axum_client_ip::ClientIp;
+use axum_client_ip::InsecureClientIp;
 use crossbeam::channel::Sender;
 use futures_util::StreamExt;
 use std::net::{IpAddr, SocketAddr};
@@ -46,7 +46,7 @@ struct State {
 async fn get_websocket(
     ws: WebSocketUpgrade,
     Extension(state): Extension<Arc<State>>,
-    ClientIp(addr): ClientIp,
+    InsecureClientIp(addr): InsecureClientIp,
 ) -> impl IntoResponse {
     let sender = state.sender.clone();
     ws.on_upgrade(move |ws| websocket(ws, sender, addr))
